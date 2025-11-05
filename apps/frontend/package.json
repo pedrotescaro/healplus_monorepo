@@ -1,0 +1,9 @@
+{
+  "name": "@healplus/frontend",
+  "version": "1.0.0",
+  "description": "Frontend estático para HealPlus (healplus)",
+  "private": true,
+  "scripts": {
+    "start": "echo 'Este é um projeto estático. Abra index.html diretamente ou use um servidor estático como o live-server.'"
+  }
+}
