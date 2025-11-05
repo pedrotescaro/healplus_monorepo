@@ -1,0 +1,26 @@
+// Configurações de inicialização do Gradle para o projeto HealPlus
+allprojects {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+// Configurações específicas para Java
+allprojects {
+    if (project.plugins.hasPlugin('java')) {
+        java {
+            sourceCompatibility = JavaVersion.VERSION_17
+            targetCompatibility = JavaVersion.VERSION_17
+        }
+    }
+}
+
+// Configurações para o Spring Boot
+allprojects {
+    if (project.plugins.hasPlugin('org.springframework.boot')) {
+        springBoot {
+            mainClass = 'com.healplus.backend.BackendApplication'
+        }
+    }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "@healplus/backend",
+  "version": "1.0.0",
+  "description": "Backend service for HealPlus (Java/Gradle)",
+  "private": true,
+  "scripts": {
+    "build": "./gradlew build",
+    "start": "./gradlew bootRun"
+  }
+}
