@@ -1,0 +1,10 @@
+{
+  "name": "@healplus/mobile",
+  "version": "1.0.0",
+  "description": "Mobile application for HealPlus (Android/iOS)",
+  "private": true,
+  "scripts": {
+    "android": "./gradlew installDebug",
+    "ios": "echo 'Run from Xcode'"
+  }
+}
