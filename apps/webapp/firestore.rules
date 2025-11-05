@@ -1,0 +1,38 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+  
+    // Regras para a coleção 'users'
+    match /users/{userId} {
+      // Usuários autenticados podem ler/escrever seus próprios documentos
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Permitir listagem para usuários autenticados (para busca de pacientes)
+      allow list: if request.auth != null;
+    }
+
+    // Regras para subcoleções dentro de 'users' (anamnesis, reports, assessments, etc.)
+    match /users/{userId}/{collection}/{docId} {
+      // Usuários autenticados podem ler/escrever suas próprias subcoleções
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Permitir listagem para usuários autenticados
+      allow list: if request.auth != null;
+    }
+    
+    // Regras para a coleção 'chats'
+    match /chats/{chatId} {
+    	allow read, update, delete: if request.auth != null && request.auth.uid in resource.data.participants;
+      allow create: if request.auth != null && request.auth.uid in request.resource.data.participants;
+      
+      // Regras para a subcoleção 'messages'
+      match /messages/{messageId} {
+      	allow read: if request.auth != null && get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid]);
+        allow create: if request.auth != null && get(/databases/$(database)/documents/chats/$(chatId)).data.participants.hasAny([request.auth.uid])
+                      && request.resource.data.senderId == request.auth.uid;
+      }
+    }
+  }
+}

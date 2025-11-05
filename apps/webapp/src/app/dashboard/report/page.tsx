@@ -1,0 +1,23 @@
+
+"use client";
+
+import { ReportGenerator } from "@/components/dashboard/report-generator";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useTranslation } from "@/contexts/app-provider";
+
+export default function ReportPage() {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-6">
+       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight">{t.generateReportCardTitle}</h1>
+        <p className="text-muted-foreground text-sm sm:text-base">Relatórios estruturados em minutos, com linguagem clínica e apoio à decisão.</p>
+      </div>
+      <Card>
+        <CardContent className="p-6">
+          <ReportGenerator />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

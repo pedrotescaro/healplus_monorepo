@@ -1,0 +1,23 @@
+{
+  "apphosting": {
+    "backend": {
+      "source": ".",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "**/node_modules/**",
+        "**/docs/**",
+        "**/PERFORMANCE_OPTIMIZATIONS.md",
+        "**/CHANGELOG.md",
+        "**/CONTRIBUTING.md",
+        "**/DEPLOY_INSTRUCTIONS.md",
+        "**/LICENSE",
+        "**/README.md",
+        "**/lighthouse-report.html",
+        "**/bundle-analyzer/**",
+        "**/.turbo/**",
+        "**/.next/cache/**"
+      ]
+    }
+  }
+}
