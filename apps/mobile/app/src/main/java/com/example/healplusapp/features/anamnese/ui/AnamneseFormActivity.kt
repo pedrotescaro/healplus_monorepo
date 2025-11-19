@@ -10,15 +10,21 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.example.healplusapp.R
 import com.example.healplusapp.features.anamnese.AnamnesePreviewActivity
-import com.example.healplusapp.features.anamnese.controller.AnamneseController
 import com.example.healplusapp.features.anamnese.model.Anamnese
+import com.example.healplusapp.features.anamnese.viewmodel.AnamneseViewModel
+import com.example.healplusapp.features.anamnese.viewmodel.AnamneseUiState
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 
+@AndroidEntryPoint
 class AnamneseFormActivity : AppCompatActivity() {
-    private lateinit var controller: AnamneseController
+    private val viewModel: AnamneseViewModel by viewModels()
     private var currentId: Long? = null
     private var selectedImageUri: Uri? = null
 
@@ -30,15 +36,42 @@ class AnamneseFormActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_anamnese_form)
-        controller = AnamneseController(this)
+
+        // Configurar Toolbar
+        val toolbar = findViewById<com.google.android.material.appbar.MaterialToolbar>(R.id.toolbar)
+        setSupportActionBar(toolbar)
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        supportActionBar?.setHomeAsUpIndicator(R.drawable.ic_arrow_back)
+        
+        // Título dinâmico baseado se é edição ou criação
+        currentId = intent.getLongExtra("id", -1L).takeIf { it > 0 }
+        supportActionBar?.title = if (currentId != null) "Editar Anamnese" else "Nova Anamnese"
+        
+        toolbar.setNavigationOnClickListener {
+            onBackPressedDispatcher.onBackPressed()
+        }
 
         // Ligações de UI de botões herdados do fragment
-        findViewById<Button>(R.id.btn_escolher_imagem)?.setOnClickListener { pickImage.launch("image/*") }
-        findViewById<Button>(R.id.btn_remover_imagem)?.setOnClickListener {
-            selectedImageUri = null
-            findViewById<ImageView>(R.id.img_prev_ferida)?.setImageDrawable(null)
-            Toast.makeText(this, "Imagem removida", Toast.LENGTH_SHORT).show()
+        findViewById<Button>(R.id.btn_escolher_imagem)?.apply {
+            setOnClickListener { pickImage.launch("image/*") }
+            contentDescription = "Escolher imagem da ferida"
         }
+        findViewById<Button>(R.id.btn_remover_imagem)?.apply {
+            setOnClickListener {
+                selectedImageUri = null
+                findViewById<ImageView>(R.id.img_prev_ferida)?.setImageDrawable(null)
+                Toast.makeText(this@AnamneseFormActivity, "Imagem removida", Toast.LENGTH_SHORT).show()
+            }
+            contentDescription = "Remover imagem selecionada"
+        }
+        
+        // FAB de salvar
+        findViewById<com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton>(R.id.fab_salvar)?.apply {
+            setOnClickListener { salvar() }
+            contentDescription = "Salvar anamnese"
+        }
+        
+        // Botão antigo (se existir no layout)
         findViewById<Button>(R.id.btn_salvar_anamnese)?.setOnClickListener { salvar() }
 
         // Máscaras
@@ -68,10 +101,42 @@ class AnamneseFormActivity : AppCompatActivity() {
         }
         atualizarLeitoBar()
 
+        // Observar estado da UI
+        observeUiState()
+
         // Edição: carregar dados se for edição
         currentId = intent.getLongExtra("id", -1L).takeIf { it > 0 }
         currentId?.let { id ->
-            controller.obter(id)?.let { fillFormFromModel(it) }
+            viewModel.obterAnamnese(id)
+        }
+    }
+    
+    private fun observeUiState() {
+        lifecycleScope.launch {
+            viewModel.uiState.collect { state ->
+                when (state) {
+                    is AnamneseUiState.Loading -> {
+                        // Mostrar loading se necessário
+                    }
+                    is AnamneseUiState.Success -> {
+                        Toast.makeText(this@AnamneseFormActivity, "Salvo com sucesso", Toast.LENGTH_SHORT).show()
+                        val jsonCompleto = montarJsonCompleto()
+                        val intent = android.content.Intent(this@AnamneseFormActivity, AnamnesePreviewActivity::class.java)
+                        intent.putExtra("anamnese_json", jsonCompleto)
+                        startActivity(intent)
+                        finish()
+                    }
+                    is AnamneseUiState.AnamneseLoaded -> {
+                        fillFormFromModel(state.anamnese)
+                    }
+                    is AnamneseUiState.Error -> {
+                        Toast.makeText(this@AnamneseFormActivity, state.message, Toast.LENGTH_LONG).show()
+                    }
+                    is AnamneseUiState.Idle -> {
+                        // Estado inicial
+                    }
+                }
+            }
         }
     }
 
@@ -116,10 +181,29 @@ class AnamneseFormActivity : AppCompatActivity() {
     }
 
     private fun fillFormFromModel(a: Anamnese) {
-        findViewById<EditText>(R.id.et_nome_completo)?.setText(a.nomeCompleto)
+        // Preencher campos principais
+        val nomeEditText = findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.et_nome_completo)
+            ?: findViewById<EditText>(R.id.et_nome_completo)
+        nomeEditText?.setText(a.nomeCompleto)
+        
         findViewById<EditText>(R.id.et_data_consulta)?.setText(a.dataConsulta)
         findViewById<EditText>(R.id.et_localizacao)?.setText(a.localizacao)
-        // Demais campos podem ser preenchidos a partir do JSON salvo, se desejar
+        
+        // Tentar preencher outros campos do JSON se disponível
+        try {
+            val json = org.json.JSONObject(a.dadosJson)
+            json.optString("dataNascimento")?.takeIf { it.isNotEmpty() }?.let {
+                findViewById<EditText>(R.id.et_data_nascimento)?.setText(it)
+            }
+            json.optString("telefone")?.takeIf { it.isNotEmpty() }?.let {
+                findViewById<EditText>(R.id.et_telefone)?.setText(it)
+            }
+            json.optString("email")?.takeIf { it.isNotEmpty() }?.let {
+                findViewById<EditText>(R.id.et_email)?.setText(it)
+            }
+        } catch (e: Exception) {
+            // JSON inválido ou campos não disponíveis
+        }
     }
 
     private fun addDateMask(editText: EditText?) {
@@ -197,8 +281,15 @@ class AnamneseFormActivity : AppCompatActivity() {
     }
 
     private fun putText(id: Int, key: String, data: JSONObject) {
-        val et = findViewById<EditText>(id)
-        if (et != null) data.put(key, et.text?.toString()?.trim() ?: "")
+        // Tentar TextInputEditText primeiro, depois EditText normal
+        val textInputEditText = findViewById<com.google.android.material.textfield.TextInputEditText>(id)
+        val editText = findViewById<EditText>(id)
+        val text = textInputEditText?.text?.toString()?.trim() 
+            ?: editText?.text?.toString()?.trim() 
+            ?: ""
+        if (text.isNotEmpty() || textInputEditText != null || editText != null) {
+            data.put(key, text)
+        }
     }
 
     private fun putCheck(id: Int, key: String, data: JSONObject) {
@@ -331,9 +422,21 @@ class AnamneseFormActivity : AppCompatActivity() {
 
     private fun validarCamposObrigatorios(): Boolean {
         var invalido = false
+        
+        // Validar nome completo
+        val nomeEditText = findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.et_nome_completo)
+            ?: findViewById<EditText>(R.id.et_nome_completo)
+        val nomeLayout = findViewById<com.google.android.material.textfield.TextInputLayout>(R.id.layout_nome_completo)
+        
+        if (nomeEditText?.text.isNullOrBlank()) {
+            nomeLayout?.error = "Nome é obrigatório"
+            invalido = true
+        } else {
+            nomeLayout?.error = null
+        }
+        
+        // Validar outros campos obrigatórios
         val obrigatorios = listOf(
-            R.id.et_nome_completo to "Nome é obrigatório",
-            R.id.et_data_nascimento to "Data de nascimento é obrigatória",
             R.id.et_localizacao to "Localização é obrigatória"
         )
         obrigatorios.forEach { (id, msg) ->
@@ -341,8 +444,11 @@ class AnamneseFormActivity : AppCompatActivity() {
             if (et != null && et.text.isNullOrBlank()) {
                 et.error = msg
                 invalido = true
+            } else {
+                et?.error = null
             }
         }
+        
         if (invalido) Toast.makeText(this, "Preencha os campos obrigatórios", Toast.LENGTH_SHORT).show()
         return !invalido
     }
@@ -391,9 +497,11 @@ class AnamneseFormActivity : AppCompatActivity() {
         if (!validarEmailTelefone()) return
 
         val jsonCompleto = montarJsonCompleto()
-        val nome = findViewById<EditText>(R.id.et_nome_completo).text.toString().trim()
-        val dataConsulta = findViewById<EditText>(R.id.et_data_consulta).text.toString().trim()
-        val local = findViewById<EditText>(R.id.et_localizacao).text.toString().trim()
+        val nomeEditText = findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.et_nome_completo)
+            ?: findViewById<EditText>(R.id.et_nome_completo)
+        val nome = nomeEditText?.text?.toString()?.trim() ?: ""
+        val dataConsulta = findViewById<EditText>(R.id.et_data_consulta)?.text?.toString()?.trim() ?: ""
+        val local = findViewById<EditText>(R.id.et_localizacao)?.text?.toString()?.trim() ?: ""
 
         val model = Anamnese(
             id = currentId,
@@ -402,15 +510,7 @@ class AnamneseFormActivity : AppCompatActivity() {
             localizacao = local,
             dadosJson = jsonCompleto
         )
-        controller.salvar(model)
-        Toast.makeText(this, "Salvo com sucesso", Toast.LENGTH_SHORT).show()
-
-        // Abrir preview por Intent
-        val intent = android.content.Intent(this, AnamnesePreviewActivity::class.java)
-        intent.putExtra("anamnese_json", jsonCompleto)
-        startActivity(intent)
-        finish()
+        viewModel.salvarAnamnese(model)
     }
 }
-
 
